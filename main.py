@@ -1,18 +1,23 @@
+"""Main module for the donkey_ge project.
+
+This module parses YML configuration files and calls the `donkey_ge` function.
+It is the entry point for running the genetic programming-based heuristics.
+
+Author: Erik Hemberg
+"""
+
+__author__ = "Erik Hemberg"
+
 import sys
 import argparse
 from typing import Any, Dict, List
 
+
 import yaml
+import pandas as pd
+
 
 from heuristics import donkey_ge, donkey_ge_coev
-
-
-__author__ = "Erik Hemberg"
-
-
-"""
-Main function for donkey_ge. Parses YML config file and calls donkey_ge.
-"""
 
 
 def parse_arguments(param: List[str]) -> Dict[str, Any]:
@@ -63,6 +68,7 @@ def main(args: List[str]) -> Dict[str, Any]:
         donkey_ge_coev.run(args)
     else:
         donkey_ge.run(args)
+        print("Corriendo main.py:", __name__)
 
     return args
 
