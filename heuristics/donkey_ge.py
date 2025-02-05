@@ -11,6 +11,8 @@ from typing import List, Tuple, Any, Dict, Optional, DefaultDict, Sequence, Unio
 from numbers import Number
 import json
 
+import pandas as pd 
+
 from util.utils import import_function
 
 
@@ -981,6 +983,54 @@ def get_fitness_function(param: Dict[str, str]) -> FitnessFunction:
     return fitness_function
 
 
+def run_multiple_experiments(param: Dict[str, Any], n_runs: int = 10) -> pd.DataFrame:
+    """
+    Execute the run function multiple times and store results in a DataFrame.
+    
+    :param param: Parameters for the run function
+    :type param: dict
+    :param n_runs: Number of runs to execute
+    :type n_runs: int
+    :return: DataFrame containing results of all runs
+    :rtype: pd.DataFrame
+    """
+    results = []
+    
+    for i in range(n_runs):
+        print(f"\nExecuting run {i+1}/{n_runs}")
+        # Create a new seed for each run
+        current_param = param.copy()
+        current_param['seed'] = int(time.time() * 1000) + i
+        
+        # Execute run
+        best_individual = run(current_param)
+        
+        # Store results
+        result = {
+            'run_number': i + 1,
+            'seed': current_param['seed'],
+            'best_fitness': best_individual.fitness,
+            'best_genome': best_individual.genome,
+            'best_phenotype': best_individual.phenotype,
+            'used_codons': best_individual.used_codons
+        }
+        results.append(result)
+    
+    # Convert to DataFrame
+    df = pd.DataFrame(results)
+    return df
+
 if __name__ == "__main__":
     ARGS = parse_arguments()
-    run(ARGS)
+    
+    # To run a single experiment:
+    # best_individual = run(ARGS)
+    
+    # To run multiple experiments and get results in a DataFrame:
+    results_df = run_multiple_experiments(ARGS, n_runs=5)
+    print("\nSummary of all runs:")
+    print(results_df.describe())
+    
+    # Save results to CSV
+    results_df.to_csv('experiment_results.csv', index=False)
+    print("\nResults saved to experiment_results.csv")
