@@ -983,6 +983,7 @@ def get_fitness_function(param: Dict[str, str]) -> FitnessFunction:
     return fitness_function
 
 
+# TODO: Revisar función y verificar que esté bien
 def run_multiple_experiments(param: Dict[str, Any], n_runs: int = 10) -> pd.DataFrame:
     """
     Execute the run function multiple times and store results in a DataFrame.
@@ -1015,6 +1016,10 @@ def run_multiple_experiments(param: Dict[str, Any], n_runs: int = 10) -> pd.Data
             'used_codons': best_individual.used_codons
         }
         results.append(result)
+    
+    # Save results to CSV
+    results_df.to_csv('experiment_results.csv', index=False)
+    print("\nResults saved to experiment_results.csv")
     
     # Convert to DataFrame
     df = pd.DataFrame(results)
