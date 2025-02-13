@@ -1,4 +1,8 @@
-"""Main module for the donkey_ge project.
+#! /usr/bin/env python
+
+
+"""
+Main module for the donkey_ge project.
 
 This module parses YML configuration files and calls the `donkey_ge` function.
 It is the entry point for running the genetic programming-based heuristics.
