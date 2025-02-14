@@ -50,8 +50,8 @@ def parse_arguments(param: List[str]) -> Dict[str, Any]:
         "-r", 
         "--repetitions",
         type=int, 
-        default=0,
-        ) # TODO: Added by German
+        default=1,
+        ) # NOTE: Added by German
 
     _args = parser.parse_args(param)
 
@@ -62,7 +62,7 @@ def parse_arguments(param: List[str]) -> Dict[str, Any]:
     # Set CLI arguments in settings
     settings["output_dir"] = _args.output_dir
     settings["coev"] = _args.coev
-    settings["repetitions"] = _args.repetitions # TODO: Added by German
+    settings["repetitions"] = _args.repetitions # NOTE: Added by German
 
     return settings
 
