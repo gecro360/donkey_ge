@@ -1,4 +1,9 @@
 #! /usr/bin/env python
+
+"""
+GE implementation. Bastardization of PonyGP and PonyGE.
+"""
+
 import math
 import time
 import argparse
@@ -18,10 +23,13 @@ from util.utils import import_function
 
 __author__ = "Erik Hemberg"
 
-"""GE implementation. Bastardization of PonyGP and PonyGE.
 
-"""
+DEFAULT_FITNESS: float = -float("inf")
 
+
+################
+# Grammar
+################
 
 class Grammar(object):
     """
@@ -192,6 +200,9 @@ class Grammar(object):
             str_output: str = "".join(output)
             return str_output, used_input
 
+################
+# Individual 
+################
 
 class Individual(object):
     """A GE individual
@@ -237,38 +248,6 @@ class Individual(object):
         return "Ind: {0}; {1}".format(str(self.phenotype), self.get_fitness())
 
 
-class Population(object):
-    """A population container
-
-    Attributes:
-        fitness_function:
-        grammar:
-        individuals:
-    """
-
-    def __init__(
-        self, fitness_function: Any, grammar: Grammar, individuals: List[Individual]
-    ) -> None:
-        """Container for a population.
-
-        :param fitness_function:
-        :type fitness_function: function
-        :param grammar:
-        :type grammar: Grammar
-        :param individuals:
-        :type individuals: list of Individual
-        """
-        self.fitness_function = fitness_function
-        self.grammar = grammar
-        self.individuals = individuals
-
-    def __str__(self) -> str:
-        individuals = "\n".join(map(str, self.individuals))
-        _str = "{} {} \n{}".format(str(self.fitness_function), self.grammar.file_name, individuals)
-
-        return _str
-
-
 def map_input_with_grammar(individual: Individual, grammar: Grammar) -> Individual:
     """ Generate a sentence from inputs and set the sentence and number of used
     inputs.
@@ -307,6 +286,59 @@ def map_input_with_grammar(individual: Individual, grammar: Grammar) -> Individu
 
     return individual
 
+################
+# Population
+################
+
+class Population(object):
+    """A population container
+
+    Attributes:
+        fitness_function:
+        grammar:
+        individuals:
+    """
+
+    def __init__(
+        self, fitness_function: Any, grammar: Grammar, individuals: List[Individual]
+    ) -> None:
+        """Container for a population.
+
+        :param fitness_function:
+        :type fitness_function: function
+        :param grammar:
+        :type grammar: Grammar
+        :param individuals:
+        :type individuals: list of Individual
+        """
+        self.fitness_function = fitness_function
+        self.grammar = grammar
+        self.individuals = individuals
+
+    def __str__(self) -> str:
+        individuals = "\n".join(map(str, self.individuals))
+        _str = "{} {} \n{}".format(str(self.fitness_function), self.grammar.file_name, individuals)
+
+        return _str
+
+    
+def initialise_population(size: int) -> List[Individual]:
+    """Create a population of Individuals of the given size.
+
+    :param size: Number of individuals to generate
+    :type size: int
+    :return: Randomly generated individuals
+    :rtype: list of Individual
+    """
+    assert size > 0
+
+    individuals = [Individual(None) for _ in range(size)]
+
+    return individuals
+
+################
+# Fitness 
+################
 
 class FitnessFunction(object):
     """
@@ -315,6 +347,24 @@ class FitnessFunction(object):
 
     def __call__(self, fcn_str: str, cache: Dict[str, float]) -> float:
         raise NotImplementedError("Define in subclass")
+
+
+def get_fitness_function(param: Dict[str, str]) -> FitnessFunction:
+    """Returns fitness function object.
+
+    Used to construct fitness functions from the configuration parameters
+
+    :param param: Fitness function parameters
+    :type param: dict
+    :return: Fitness function
+    :rtype: Object
+    """
+
+    name = param["name"]
+    fitness_function_method = import_function(name)
+    fitness_function = fitness_function_method(param)
+
+    return fitness_function
 
 
 def evaluate(
@@ -337,21 +387,6 @@ def evaluate(
     assert individual.fitness is not None
 
     return individual
-
-
-def initialise_population(size: int) -> List[Individual]:
-    """Create a population of Individuals of the given size.
-
-    :param size: Number of individuals to generate
-    :type size: int
-    :return: Randomly generated individuals
-    :rtype: list of Individual
-    """
-    assert size > 0
-
-    individuals = [Individual(None) for _ in range(size)]
-
-    return individuals
 
 
 def evaluate_fitness(
@@ -385,6 +420,75 @@ def evaluate_fitness(
     assert n_individuals == len(individuals), "{} != {}".format(n_individuals, len(individuals))
 
     return individuals
+
+
+##############################################################
+# Genetic operatorions and genetic programming evolution 
+##############################################################
+
+
+def onepoint_crossover(
+    p_0: Individual, p_1: Individual, crossover_probability: float
+) -> List[Individual]:
+    """Given two individuals, create two children using one-point
+    crossover and return them.
+
+    :param p_0: A parent
+    :type p_0: Individual
+    :param p_1: Another parent
+    :type p_1: Individual
+    :param crossover_probability: Probability of crossover
+    :type crossover_probability: float
+    :return: A pair of new individual solutions
+    :rtype: list of Individuals
+
+    """
+    assert p_0.used_input > 0 and p_1.used_input > 0
+    # Get the chromosomes
+    c_p_0 = p_0.genome
+    c_p_1 = p_1.genome
+    # Only within used codons
+    max_p_0 = p_0.used_input
+    max_p_1 = p_1.used_input
+
+    pt_p_0, pt_p_1 = random.randint(1, max_p_0), random.randint(1, max_p_1)
+    # Make new chromosomes by crossover: these slices perform copies
+    if random.random() < crossover_probability:
+        c_0 = c_p_0[:pt_p_0] + c_p_1[pt_p_1:]
+        c_1 = c_p_1[:pt_p_1] + c_p_0[pt_p_0:]
+    else:
+        c_0 = c_p_0[:]
+        c_1 = c_p_1[:]
+
+    individuals = [Individual(c_0), Individual(c_1)]
+
+    return individuals
+
+
+def int_flip_mutation(individual: Individual, mutation_probability: float) -> Individual:
+    """Mutate the individual by randomly choosing a new int with
+    probability.
+
+    :param individual:
+    :type individual: Individual
+    :param mutation_probability: Probability of changing value
+    :type mutation_probability: float
+    :return: Mutated individual
+    :rtype: Individual
+
+    """
+
+    assert Individual.codon_size > 0
+    assert 0 <= mutation_probability <= 1.0
+
+    for i in range(len(individual.genome)):
+        if random.random() < mutation_probability:
+            individual.genome[i] = random.randint(0, Individual.codon_size)
+            individual.phenotype = Individual.DEFAULT_PHENOTYPE
+            individual.used_input = 0
+            individual.fitness = DEFAULT_FITNESS
+
+    return individual
 
 
 def variation(parents: List[Individual], param: Dict[str, Any]) -> List[Individual]:
@@ -429,6 +533,105 @@ def variation(parents: List[Individual], param: Dict[str, Any]) -> List[Individu
     assert param["population_size"] == len(new_individuals)
 
     return new_individuals
+
+
+def sort_population(individuals: List[Individual]) -> List[Individual]:
+    """
+    Return a list sorted on the fitness value of the individuals in
+    the population. Descending order.
+
+    :param individuals: The population of individuals
+    :type individuals: list
+    :return: Population of individuals sorted by fitness in descending order
+    :rtype: list
+
+    """
+
+    # Sort the individual elements on the fitness
+    individuals = sorted(individuals, key=lambda x: x.fitness, reverse=True)
+
+    return individuals
+
+
+def tournament_selection(
+    population: List[Individual], population_size: int, tournament_size: int
+) -> List[Individual]:
+    """
+    Return individuals from a population by drawing
+    `tournament_size` competitors randomly and selecting the best
+    of the competitors. `population_size` number of tournaments are
+    held.
+
+    :param population: Individuals to draw from
+    :type population: list of Individual
+    :param population_size: Number of individuals to select
+    :type population_size: int
+    :param tournament_size: Number of competing individuals
+    :type tournament_size: int
+    :return: Selected individuals
+    :rtype: list of Individuals
+    """
+    assert tournament_size > 0
+    assert tournament_size <= len(population), "{} > {}".format(tournament_size, len(population))
+
+    # Iterate until there are enough tournament winners selected
+    winners: List[Individual] = []
+    while len(winners) < population_size:
+        # Randomly select tournament size individual solutions
+        # from the population.
+        competitors = random.sample(population, tournament_size)
+        # Rank the selected solutions
+        competitors = sort_population(competitors)
+        # Append the best solution to the winners
+        winners.append(competitors[0])
+
+    assert len(winners) == population_size
+
+    return winners
+
+
+def generational_replacement(
+    new_population: List[Individual],
+    old_population: List[Individual],
+    elite_size: int,
+    population_size: int,
+) -> List[Individual]:
+    """
+    Return a new population. The `elite_size` best old_population
+    are appended to the new population.
+
+    # TODO the number of calls to sort_population can be reduced
+
+    :param new_population: the new population
+    :type new_population: list
+    :param old_population: the old population
+    :type old_population: list
+    :param elite_size: Number of individuals to keep for new population
+    :type elite_size: int
+    :param population_size: Number of solutions in new population
+    :type population_size: int
+    :returns: the new population with the best from the old population
+    :rtype: list
+    """
+    assert len(old_population) == len(new_population) == population_size
+    assert 0 <= elite_size < population_size
+
+    # Sort the population
+    old_population = sort_population(old_population)
+    # Append a copy of the elite_size of the old population to
+    # the new population.
+    for ind in old_population[:elite_size]:
+        # TODO is this deep copy redundant
+        new_population.append(copy.deepcopy(ind))
+
+    # Sort the new population
+    new_population = sort_population(new_population)
+
+    # Set the new population size
+    new_population = new_population[:population_size]
+    assert len(new_population) == population_size
+
+    return new_population
 
 
 def search_loop(population: Population, param: Dict[str, Any]) -> Individual:
@@ -510,6 +713,11 @@ def search_loop(population: Population, param: Dict[str, Any]) -> Individual:
     write_run_output(generation, stats, param)
 
     return best_ever
+
+
+#####################
+# Utility functions
+#####################
 
 
 def print_cache_stats(generation: int, param: Dict[str, Any]) -> None:
@@ -629,169 +837,6 @@ def print_stats(
     stats["solution_values"].append([_.phenotype for _ in individuals])
 
 
-def int_flip_mutation(individual: Individual, mutation_probability: float) -> Individual:
-    """Mutate the individual by randomly choosing a new int with
-    probability.
-
-    :param individual:
-    :type individual: Individual
-    :param mutation_probability: Probability of changing value
-    :type mutation_probability: float
-    :return: Mutated individual
-    :rtype: Individual
-
-    """
-
-    assert Individual.codon_size > 0
-    assert 0 <= mutation_probability <= 1.0
-
-    for i in range(len(individual.genome)):
-        if random.random() < mutation_probability:
-            individual.genome[i] = random.randint(0, Individual.codon_size)
-            individual.phenotype = Individual.DEFAULT_PHENOTYPE
-            individual.used_input = 0
-            individual.fitness = DEFAULT_FITNESS
-
-    return individual
-
-
-def tournament_selection(
-    population: List[Individual], population_size: int, tournament_size: int
-) -> List[Individual]:
-    """
-    Return individuals from a population by drawing
-    `tournament_size` competitors randomly and selecting the best
-    of the competitors. `population_size` number of tournaments are
-    held.
-
-    :param population: Individuals to draw from
-    :type population: list of Individual
-    :param population_size: Number of individuals to select
-    :type population_size: int
-    :param tournament_size: Number of competing individuals
-    :type tournament_size: int
-    :return: Selected individuals
-    :rtype: list of Individuals
-    """
-    assert tournament_size > 0
-    assert tournament_size <= len(population), "{} > {}".format(tournament_size, len(population))
-
-    # Iterate until there are enough tournament winners selected
-    winners: List[Individual] = []
-    while len(winners) < population_size:
-        # Randomly select tournament size individual solutions
-        # from the population.
-        competitors = random.sample(population, tournament_size)
-        # Rank the selected solutions
-        competitors = sort_population(competitors)
-        # Append the best solution to the winners
-        winners.append(competitors[0])
-
-    assert len(winners) == population_size
-
-    return winners
-
-
-def onepoint_crossover(
-    p_0: Individual, p_1: Individual, crossover_probability: float
-) -> List[Individual]:
-    """Given two individuals, create two children using one-point
-    crossover and return them.
-
-    :param p_0: A parent
-    :type p_0: Individual
-    :param p_1: Another parent
-    :type p_1: Individual
-    :param crossover_probability: Probability of crossover
-    :type crossover_probability: float
-    :return: A pair of new individual solutions
-    :rtype: list of Individuals
-
-    """
-    assert p_0.used_input > 0 and p_1.used_input > 0
-    # Get the chromosomes
-    c_p_0 = p_0.genome
-    c_p_1 = p_1.genome
-    # Only within used codons
-    max_p_0 = p_0.used_input
-    max_p_1 = p_1.used_input
-
-    pt_p_0, pt_p_1 = random.randint(1, max_p_0), random.randint(1, max_p_1)
-    # Make new chromosomes by crossover: these slices perform copies
-    if random.random() < crossover_probability:
-        c_0 = c_p_0[:pt_p_0] + c_p_1[pt_p_1:]
-        c_1 = c_p_1[:pt_p_1] + c_p_0[pt_p_0:]
-    else:
-        c_0 = c_p_0[:]
-        c_1 = c_p_1[:]
-
-    individuals = [Individual(c_0), Individual(c_1)]
-
-    return individuals
-
-
-def sort_population(individuals: List[Individual]) -> List[Individual]:
-    """
-    Return a list sorted on the fitness value of the individuals in
-    the population. Descending order.
-
-    :param individuals: The population of individuals
-    :type individuals: list
-    :return: Population of individuals sorted by fitness in descending order
-    :rtype: list
-
-    """
-
-    # Sort the individual elements on the fitness
-    individuals = sorted(individuals, key=lambda x: x.fitness, reverse=True)
-
-    return individuals
-
-
-def generational_replacement(
-    new_population: List[Individual],
-    old_population: List[Individual],
-    elite_size: int,
-    population_size: int,
-) -> List[Individual]:
-    """
-    Return a new population. The `elite_size` best old_population
-    are appended to the new population.
-
-    # TODO the number of calls to sort_population can be reduced
-
-    :param new_population: the new population
-    :type new_population: list
-    :param old_population: the old population
-    :type old_population: list
-    :param elite_size: Number of individuals to keep for new population
-    :type elite_size: int
-    :param population_size: Number of solutions in new population
-    :type population_size: int
-    :returns: the new population with the best from the old population
-    :rtype: list
-    """
-    assert len(old_population) == len(new_population) == population_size
-    assert 0 <= elite_size < population_size
-
-    # Sort the population
-    old_population = sort_population(old_population)
-    # Append a copy of the elite_size of the old population to
-    # the new population.
-    for ind in old_population[:elite_size]:
-        # TODO is this deep copy redundant
-        new_population.append(copy.deepcopy(ind))
-
-    # Sort the new population
-    new_population = sort_population(new_population)
-
-    # Set the new population size
-    new_population = new_population[:population_size]
-    assert len(new_population) == population_size
-
-    return new_population
-
-
 def parse_arguments() -> Dict[str, Union[str, bool, Number]]:
     """
     Returns a dictionary of the default parameters, or the ones set by
@@ -905,6 +950,14 @@ def parse_arguments() -> Dict[str, Union[str, bool, Number]]:
     return vars(options)
 
 
+#####################
+# Main functions
+#####################
+
+
+# TODO! German modified this file to allow for multiple iterations of the code 
+# TODO: Me va a entregar ahora un DataFrame 
+
 def run(param: Dict[str, Any]) -> Individual:
     """
     Return the best solution. Create an initial
@@ -914,6 +967,8 @@ def run(param: Dict[str, Any]) -> Individual:
     :type param: dict
     :returns: Best solution
     """
+
+    # TODO!: Volver arbitraria la semilla
 
     start_time = time.time()
 
@@ -936,94 +991,44 @@ def run(param: Dict[str, Any]) -> Individual:
     assert param["elite_size"] < param["population_size"]
     assert 0.0 <= param["crossover_probability"] <= 1.0
     assert 0.0 <= param["mutation_probability"] <= 1.0
+    
+    # Create the dataframe that will store the simulations  
+    simulations = pd.DataFrame()
+    
+    # TODO! : Review if there is a better way to fill the information of the pandas dataframe instead of using a for loop
+    # TODO! : Review if it is possible to parallelize the process using Dask 
+    for i in range(param["repetitions"]):
 
-    ###########################
-    # Create initial population
-    ###########################
-    grammar = Grammar(param["bnf_grammar"])
-    grammar.read_bnf_file(grammar.file_name)
-    fitness_function = get_fitness_function(param["fitness_function"])
-    # These are parameters since defaults are dangerous
-    # TODO make clearer
-    Individual.max_length = param["max_length"]
-    Individual.codon_size = param["integer_input_element_max"]
-    individuals = initialise_population(param["population_size"])
+        ###########################
+        # Create initial population
+        ###########################
+        grammar = Grammar(param["bnf_grammar"])
+        grammar.read_bnf_file(grammar.file_name)
+        fitness_function = get_fitness_function(param["fitness_function"])
+        # These are parameters since defaults are dangerous
+        # TODO make clearer
+        Individual.max_length = param["max_length"]
+        Individual.codon_size = param["integer_input_element_max"]
+        individuals = initialise_population(param["population_size"])
 
-    population = Population(fitness_function, grammar, individuals)
+        population = Population(fitness_function, grammar, individuals)
 
-    ###########################
-    # Evolutionary search
-    ###########################
-    best_ever = search_loop(population, param)
+        ###########################
+        # Evolutionary search
+        ###########################
+        # TODO!: Modificar search_loop para que me entregue ahora no solo el "best_ever", sino toda la secuencia que fue evolucionando 
+        best_ever = search_loop(population, param)
+        
+        ####################################################################
+        # Add the results of each simulation as a column of the dataframe  
+        ####################################################################
+        simulations[f'Column_{i+1}'] = pd.Series([best_ever]) 
 
     # Display results
     print("Time: {:.3f} Best solution:{}".format(time.time() - start_time, best_ever))
 
-    return best_ever
+    return simulations
 
-
-DEFAULT_FITNESS: float = -float("inf")
-
-
-def get_fitness_function(param: Dict[str, str]) -> FitnessFunction:
-    """Returns fitness function object.
-
-    Used to construct fitness functions from the configuration parameters
-
-    :param param: Fitness function parameters
-    :type param: dict
-    :return: Fitness function
-    :rtype: Object
-    """
-
-    name = param["name"]
-    fitness_function_method = import_function(name)
-    fitness_function = fitness_function_method(param)
-
-    return fitness_function
-
-
-# TODO: Revisar función y verificar que esté bien
-def run_multiple_experiments(param: Dict[str, Any], n_runs: int = 10) -> pd.DataFrame:
-    """
-    Execute the run function multiple times and store results in a DataFrame.
-    
-    :param param: Parameters for the run function
-    :type param: dict
-    :param n_runs: Number of runs to execute
-    :type n_runs: int
-    :return: DataFrame containing results of all runs
-    :rtype: pd.DataFrame
-    """
-    results = []
-    
-    for i in range(n_runs):
-        print(f"\nExecuting run {i+1}/{n_runs}")
-        # Create a new seed for each run
-        current_param = param.copy()
-        current_param['seed'] = int(time.time() * 1000) + i
-        
-        # Execute run
-        best_individual = run(current_param)
-        
-        # Store results
-        result = {
-            'run_number': i + 1,
-            'seed': current_param['seed'],
-            'best_fitness': best_individual.fitness,
-            'best_genome': best_individual.genome,
-            'best_phenotype': best_individual.phenotype,
-            'used_codons': best_individual.used_codons
-        }
-        results.append(result)
-    
-    # Save results to CSV
-    results_df.to_csv('experiment_results.csv', index=False)
-    print("\nResults saved to experiment_results.csv")
-    
-    # Convert to DataFrame
-    df = pd.DataFrame(results)
-    return df
 
 if __name__ == "__main__":
     ARGS = parse_arguments()
