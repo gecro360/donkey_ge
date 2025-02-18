@@ -19,6 +19,7 @@ import json
 import pandas as pd 
 
 from util.utils import import_function
+from util import multiple_runs_util
 
 
 __author__ = "Erik Hemberg"
@@ -657,6 +658,11 @@ def search_loop(population: Population, param: Dict[str, Any]) -> Individual:
     population.individuals = evaluate_fitness(
         population.individuals, population.grammar, population.fitness_function, param
     )
+    
+    # NOTE Added by German 
+    # Fitness_value_list 
+    fitness_values_list = [individual.fitness for individual in population.individuals]
+    
     # Set best solution
     population.individuals = sort_population(population.individuals)
     best_ever = population.individuals[0]
@@ -689,6 +695,9 @@ def search_loop(population: Population, param: Dict[str, Any]) -> Individual:
         new_individuals = evaluate_fitness(
             new_individuals, population.grammar, population.fitness_function, param
         )
+        
+        # NOTE: Added by German         
+        fitness_values_list.extend([individual.fitness for individual in population.individuals])
 
         ##################
         # Replacement. Replace individual solutions in the population
@@ -712,7 +721,8 @@ def search_loop(population: Population, param: Dict[str, Any]) -> Individual:
 
     write_run_output(generation, stats, param)
 
-    return best_ever
+    # Todo! Return both the fitness values list, as well as the best_ever as a tuple so that I do not break code!!
+    return best_ever, fitness_values_list
 
 
 #####################
@@ -998,6 +1008,9 @@ def run(param: Dict[str, Any]) -> Individual:
     # TODO! : Review if there is a better way to fill the information of the pandas dataframe instead of using a for loop
     # TODO! : Review if it is possible to parallelize the process using Dask 
     for i in range(param["repetitions"]):
+        
+        # Fitness value list for each simulation 
+        fitness_value_list = []
 
         ###########################
         # Create initial population
@@ -1016,31 +1029,33 @@ def run(param: Dict[str, Any]) -> Individual:
         ###########################
         # Evolutionary search
         ###########################
-        # TODO!: Modificar search_loop para que me entregue ahora no solo el "best_ever", sino toda la secuencia que fue evolucionando 
-        best_ever = search_loop(population, param)
+        best_ever, fitness_value_list = search_loop(population, param)
         
         ####################################################################
         # Add the results of each simulation as a column of the dataframe  
         ####################################################################
-        simulations[f'Column_{i+1}'] = pd.Series([best_ever]) 
+        simulations[f'Column_{i+1}'] = pd.Series(fitness_value_list) 
 
     # Display results
-    print("Time: {:.3f} Best solution:{}".format(time.time() - start_time, best_ever))
+    #print("Time: {:.3f} Best solution:{}".format(time.time() - start_time, best_ever))
+    
+    # Additional functionality from "multiple_runs_util.py" such as: calculate descriptive statistics, printing simulations or exporting results 
+    
+    # Plot the results of the simmulation
+    if param["plot"] != None: 
+        
+        # Calculate simulation statistics  
+        simulation_statistics = multiple_runs_util.compute_row_statistics(simulations)    
+        
+        # Generate plot with the "simulation statistics" 
+        multiple_runs_util.plot_row_statistics(simulation_statistics, param["plot"])
+    
+    if param["file_format"] != None: 
+        multiple_runs_util.export_results(simulations, param)
 
     return simulations
 
 
 if __name__ == "__main__":
     ARGS = parse_arguments()
-    
-    # To run a single experiment:
-    # best_individual = run(ARGS)
-    
-    # To run multiple experiments and get results in a DataFrame:
-    results_df = run_multiple_experiments(ARGS, n_runs=5)
-    print("\nSummary of all runs:")
-    print(results_df.describe())
-    
-    # Save results to CSV
-    results_df.to_csv('experiment_results.csv', index=False)
-    print("\nResults saved to experiment_results.csv")
+    run(ARGS)

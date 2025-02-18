@@ -30,28 +30,53 @@ def parse_arguments(param: List[str]) -> Dict[str, Any]:
     :return: settings from configuration file and CLI arguments
     :rtype dict:
     """
+    
+    # Generate parser for the CL arguments
     parser = argparse.ArgumentParser(description="Run donkey_ge")
+    
+    # Add arguments to the script: 
+    
     parser.add_argument(
         "-f",
         "--configuration_file",
         type=str,
         required=True,
-        help="YAML configuration file. E.g. " "configurations/demo_ge.yml",
+        help="YAML configuration file. E.g. " "configurations/demo_ge.yml"
     )
+    
     parser.add_argument(
         "-o",
         "--output_dir",
         type=str,
         default=".",
-        help="Path to directory for output files. E.g. " "donkey_ge_output",
+        help="Path to directory for output files. E.g. " "donkey_ge_output"
     )
+    
     parser.add_argument("--coev", action="store_true", help="Coevolution")
+    
     parser.add_argument(
         "-r", 
         "--repetitions",
         type=int, 
         default=1,
+        help="How many simulations"
         ) # NOTE: Added by German
+    
+    parser.add_argument(
+        "-e", 
+        "--export",
+        type=str, 
+        choices = ["csv", "xlsx", "parquet"],
+        help="file format to export the results",
+        ) # NOTE: Added by German    
+    
+    parser.add_argument(
+    "-p", 
+    "--plot",
+    type=str, 
+    choices = ["row_mean", "row_variance"],
+    help="whether to print or not the results"
+    ) # NOTE: Added by German    
 
     _args = parser.parse_args(param)
 
@@ -63,6 +88,8 @@ def parse_arguments(param: List[str]) -> Dict[str, Any]:
     settings["output_dir"] = _args.output_dir
     settings["coev"] = _args.coev
     settings["repetitions"] = _args.repetitions # NOTE: Added by German
+    settings["file_format"] = _args.export # NOTE: Added by German
+    settings["plot"] = _args.plot # NOTE: Added by German
 
     return settings
 
